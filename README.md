@@ -43,14 +43,14 @@
     返回值：
     若映射成功則返回映射區的核心起始位址，否則返回MAP_FAILED(-1)，錯誤原因存於errno 中。
 # 5. check_have_final
-    const size_t HW_SHIFT = 1; //Bus data width 128 bit = 1, 64 bit = 2                                         主要要算總共要傳輸幾次給硬體，如果是ZCU102一次可以128bit，ZEDBOARD一次64bit
-    const uint32_t offset = ((uint32_t)(layer.data[5]&0b11111111)+((layer.data[6]&0b00001111)<<8))>>HW_SHIFT;   在layer.data一組是8bit，這邊要取tile_info_number(12bit)，pola_parser說明書裡面會有，然後在除以上傳輸量就是有幾個
-    const uint32_t *tmp = (uint32_t *)((char *)baseaddr + layer.get_tile_begin_addr());                         取得你最初的位置，還有你的tile_addr放的地方
+    const size_t HW_SHIFT = 1; //Bus data width 128 bit = 1, 64 bit = 2                                         *主要要算總共要傳輸幾次給硬體，如果是ZCU102一次可以128bit，ZEDBOARD一次64bit*
+    const uint32_t offset = ((uint32_t)(layer.data[5]&0b11111111)+((layer.data[6]&0b00001111)<<8))>>HW_SHIFT;   *在layer.data一組是8bit，這邊要取tile_info_number(12bit)，pola_parser說明書裡面會有，然後在除以上傳輸量就是有*幾個
+    const uint32_t *tmp = (uint32_t *)((char *)baseaddr + layer.get_tile_begin_addr());                         *取得你最初的位置，還有你的tile_addr放的地方*
     return (tmp[offset*8+4]&0b0100)>>2;                                                                         
-    這邊要注意，以第一個layer舉例你一共有128個tile_info，offset會是127，
-    因為AR的關係，但實質上有128個資訊，所以你會是offset*8，因為tmp是一個uint32_t的資料結構，
-    所以一個tile_info 256bit，一組會有8個那你就可以推出127*8這麼多條，
-    那為啥還要加4呢，這邊要看成4*32，那就是你現在推到128條的第128bit，
+    *這邊要注意，以第一個layer舉例你一共有128個tile_info，offset會是127，*
+    *因為AR的關係，但實質上有128個資訊，所以你會是offset*8，因為tmp是一個uint32_t的資料結構，*
+    *所以一個tile_info 256bit，一組會有8個那你就可以推出127*8這麼多條，*
+    *那為啥還要加4呢，這邊要看成4*32，那就是你現在推到128條的第128bit，*
     那&100的意思就是
     Is_last_channel								1	[128]
     have_accumulate								1	[129]

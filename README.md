@@ -5,7 +5,7 @@
 # 3. Use input with picture
     "./app /dev/test 2021_09_30/pola_layer_info.bin  2021_09_30/pola_total_tile_info.bin  2021_09_30/pola_total_weight.bin ./../../ship.jpg  2021_09_30/pola_Output_Offset.txt"
 # 4. mmap()
-    ```C++
+    ```c++
     記憶體映射函數 mmap 的使用方法
 
     該函數主要用途有三個：
@@ -45,7 +45,7 @@
     若映射成功則返回映射區的核心起始位址，否則返回MAP_FAILED(-1)，錯誤原因存於errno 中。
     ```
 # 5. check_have_final()
-    ```C++
+    ```c++
     const size_t HW_SHIFT = 1;                                                                                  *主要要算總共要傳輸幾次給硬體，如果是ZCU102一次可以128bit，ZEDBOARD一次64bit //Bus data width 128 bit = 1, 64 bit = 2
     const uint32_t offset = ((uint32_t)(layer.data[5]&0b11111111)+((layer.data[6]&0b00001111)<<8))>>HW_SHIFT;   *在layer.data一組是8bit，這邊要取tile_info_number(12bit)，pola_parser說明書裡面會有，然後在除以上傳輸量就是有*幾個
     const uint32_t *tmp = (uint32_t *)((char *)baseaddr + layer.get_tile_begin_addr());                         *取得你最初的位置，還有你的tile_addr放的地方*
@@ -62,11 +62,11 @@
     如果是回傳1正確結束。
     ```
 # 6. init_addr()
-    ```C++
+    ```c++
     set_tile_begin_addr(get_tile_begin_addr()+base_addr);                                                       *就單純設定*
     ```
 # 7. get_tile_begin_addr()
-    ```C++
+    ```c++
     uint32_t tmp = 0;                                                                                           *因為已知道Tile_Info_Addr故透過tmp set uint32_t [52:83]
     for(int i = 0; i < 4; i++){                                                                                 *這邊的i 和 j 只是為了跳去這邊的bit拿資料沒有別的意思
 	    for(int j = 0 ; j < 2 ; j++){
@@ -80,7 +80,7 @@
     return tmp;
     ```
 # 8. set_tile_begin_addr()
-    ```C++
+    ```c++
 	data[10] |= (addr>>(28))&0xff;                                                                              *這邊主要是把你get_tile_begin_addr取到的位置 + base_addr之後再塞回去設定*
 	data[9] |= (addr>>(20))&0xff;                                                                               *set_tile_begin_addr(get_tile_begin_addr()+base_addr);這邊可以看到緣由*
 	data[8] |= (addr>>(12))&0xff;
@@ -88,7 +88,7 @@
     data[6] |= ((addr<<(4))&0xff);
     ```
 # 9. parse_file()
-    ```C++
+    ```c++
     //---------------------data type--------------------
     struct layer_info
     {
@@ -139,7 +139,7 @@
     return tmp;
     ```
 # 10. load_inst_data()
-    ```C++
+    ```c++
     //---------------------data type--------------------                                                        //for tile information
     struct inst                                                                                                 //256bit
     {                                                                                                           //AXI協定

@@ -335,4 +335,76 @@ if(layer.data() == nullptr){
     return -1;
 }
 cv::Mat pit;                                                                                                    //opencv MAT
+uint16_t *pre_image = (uint16_t *)malloc(32*32*64*DATA_DEPTH*2);                                                //影像前處理
+memset(pre_image, 0, 32*32*64*DATA_DEPTH*2);                                                                    //照片設定為0 32*32*8*8*(8)深度*2(byte)
+cv::Mat frame;
+while(true){
+    cap.read(frame);                                                                                            //讀取照片
+    if(frame.empty()){                                                                                          //如果沒有，就結束
+    break;
+    }
+cv::waitKey(1);                                                                                                 //等待一秒鐘，讓軟體畫出來
+cv::resize(frame, pit, cv::Size(256,256));                                                                      
+
+image_pre_process(pit, pre_image, 256, 256, 2);                                                                 //影像前處理
+memcpy(virt_addr+input_offset, pre_image, 32*32*64*DATA_DEPTH*2);                                               //把資料放到virt_addr + input_offset ，這樣可以透過映射的方式把資料打過去到實體記憶體位置
+std::cout << "HW start" << std::endl;	                                                                        //硬體啟動
+int xx = 0;
+for(auto &i : layer){
+    i.run_inference(fd);                                                                                        //開始推論，就是透過ioctl把layer_info打到我們硬體的reg這樣可以知道我們哪邊有錯
+    std::cout << "finish = "<< xx++ << std::endl;
+}
+	
+std::cout << "run_inference(fd) finish\n";
+spilt_channel((virt_addr+out_addr[0]+input_offset), res_1, 8, 8, 18);                                           //這邊是我們要切割的地方，可以看到我們把我們之前推的output_offset + virt_addr+input_offset，再到各自的大小
+spilt_channel((virt_addr+out_addr[1]+input_offset), res_2, 16, 16, 18);
+for(int ch = 0; ch < 18; ch++){
+    for(int y = 0; y < 8; y++){
+        for(int x = 0; x < 8; x++){
+            draw_1[y][x][ch] = res_1[ch*8*8+y*8+x]/1024.0;                                                      //把所有畫圖地方補上，但是為啥要除以1024，因為我的第10層quant是10所以要回推2**10
+        }
+    }
+}
+
+for(int ch = 0; ch < 18; ch++){
+    for(int y = 0; y < 16; y++){
+        for(int x = 0; x < 16; x++){
+            draw_2[y][x][ch] = res_2[ch*16*16+y*16+x]/512.0;                                                    //把所有畫圖地方補上，但是為啥要除以512，因為我的第13層quant是9所以要回推2**9
+        }
+    }
+}
+localization(pit, draw_1, draw_2, conf, iou);                                                                   //開始畫圖
+if(cv::waitKey(0)) break;
+break;
+free(res_1);                                                                                                    //請記得free指標不然會出事
+free(res_2);
+free(pre_image);
+
+munmap(virt_addr, MEM_SIZE);                                                                                    //關閉我們之前mmap的東西
+ioctl(fd, MEM_FREE, MEM_SIZE);                                                                                  //讓driver幫我們free Memsize
+close(fd);
+cap.release();
+```
+# 14. spilt_channel()
+```c++
+void spilt_channel(const void* src, void* dst, const uint32_t width, const uint32_t hight, const uint32_t channel){
+    const short *tmp_src = (const short *) src;                                                                                     //資料來源
+    short *tmp_dst = (short *) dst;                                                                                                 //目的地去向
+    const uint32_t channel_count = std::ceil(channel/(double)DATA_DEPTH);                                                           //因為我們是不滿足8用8算
+    uint32_t src_index = 0;
+    uint32_t dst_index = 0;
+
+    for(uint32_t ch = 0; ch < channel_count; ch++){
+        for(uint32_t c = 0; c < ((channel > (ch+1)*DATA_DEPTH)? DATA_DEPTH : (channel - ch*DATA_DEPTH)); c++){                      //網路上的寫法，把資料丟進去到目的地
+            for(uint32_t y = 0; y < hight; y++){
+                for(uint32_t x = 0; x < width; x++){
+                    dst_index = (ch*DATA_DEPTH+c)*width*hight+y*width+x;
+                    // std::cout << fmt::format("dst : {}, channel : {}, x : {}, y : {}\n", dst_index, ch*8+c, x, y);
+                    src_index = (ch*width*hight+y*width+x)*DATA_DEPTH+c;
+    	            tmp_dst[dst_index] = tmp_src[src_index];
+                }
+            }
+        }
+    }
+}
 ```

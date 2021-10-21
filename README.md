@@ -209,7 +209,7 @@ return std::tuple<std::vector<layer_info> ,const uint32_t>{layer, input_offset};
 # 12. init_info_addr()
 ```c++
 for(auto &i : inst_data){
-    i.set_in_addr(i.get_in_addr()+ base_addr);
+    i.set_in_addr(i.get_in_addr()+ base_addr);                                                                  //取得你再軟體算出來的input_address，你再driver要加上你去拿到的physical address，這樣你的axi才抓的到喔
     i.set_out_no_max_addr(i.get_out_no_max_addr() + base_addr);	
     i.set_out_addr(i.get_out_addr()+ base_addr);
     i.set_weight_addr(i.get_weight_addr()+ weight_addr);
@@ -218,8 +218,56 @@ for(auto &i : inst_data){
 get_in_addr()
 ```c++
 uint32_t tmp = 0;
-for(int i = 0; i < 4; i++){
-    tmp |= data[i+8] << (i*8);
+for(int i = 0; i < 4; i++){                                                                                     //為啥是i+8，因為阿data是一個uint8_t然後有32個的array，所以說我們現在8(i+8)*8(uint8_t)=64，64的意思就是32*2，那後面過來是output_address，weight_address，input_address，output_pool_address，所以64就是跳過ouptut_address，weight_address拉，直接跳到input_address
+    tmp |= data[i+8] << (i*8);                                                                                  //但是因為input_address information是32bit，所以你的迴圈就要四次拉
 }
 return tmp;
+```
+set_in_addr()
+```c++
+for(int i = 0; i < 4; i++){
+    data[i+8] = (addr>>(i*8))&0xff;                                                                             //把你取得的資料8bit by 8bit 推回去
+}
+```
+get_out_no_max_addr()
+```c++
+uint32_t tmp = 0;
+for(int i = 0; i < 4; i++){
+    tmp |= data[i] << (i*8);                                                                                    //為啥這邊沒有8，因為阿data是一個uint8_t然後有32個的array，0的意思就是32*0，那後面過來是output_address，weight_address，input_address，output_pool_address，所以0就是output_address(沒有pool的輸出)
+}
+return tmp;
+```
+set_out_no_max_addr()
+```c++
+for(int i = 0; i < 4; i++){
+   	data[i] = (addr>>(i*8))&0xff;                                                                               //把你取得的資料8bit by 8bit 推回去
+}
+```
+get_out_addr()
+```c++
+uint32_t tmp = 0;
+for(int i = 0; i < 4; i++){
+    tmp |= data[i+12] << (i*8);                                                                                 //為啥是i+12，因為阿data是一個uint8_t然後有32個的array，所以說我們現在12(i+12)*8(uint8_t)=96，96的意思就是32*3，那後面過來是output_address，weight_address，input_address，output_pool_address，所以96就是跳過ouptut_address，weight_address，input_address拉，直接跳到output_pool_address
+}
+return tmp;
+```
+set_out_addr()
+```c++
+for(int i = 0; i < 4; i++){
+    data[i+12] = (addr>>(i*8))&0xff;                                                                            //把你取得的資料8bit by 8bit 推回去
+}
+```
+get_weight_addr()
+```c++
+uint32_t tmp = 0;
+for(int i = 0; i < 4; i++){
+    tmp |= data[i+4] << (i*8);                                                                                  //為啥是i+4，因為阿data是一個uint8_t然後有32個的array，所以說我們現在4(i+4)*8(uint8_t)=32，32的意思就是32*1，那後面過來是output_address，weight_address，input_address，output_pool_address，所以32就是跳過ouptut_address拉，直接跳到weight_address
+}
+return tmp;
+```
+set_weight_addr()
+```c++
+for(int i = 0; i < 4; i++){ 
+    data[i+4] = (addr>>(i*8))&0xff;                                                                             //把你取得的資料8bit by 8bit 推回去
+}
 ```

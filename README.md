@@ -63,7 +63,7 @@ is_final_tile								1	[130]
 ```
 # 6. init_addr()
 ```c++
-set_tile_begin_addr(get_tile_begin_addr()+base_addr);                                                       *就單純設定*
+set_tile_begin_addr(get_tile_begin_addr()+base_addr);                                                       *就單純設定tile起始位置*
 ```
 # 7. get_tile_begin_addr()
 ```c++
@@ -192,16 +192,16 @@ const uint32_t input_offset = input_addr - phy_addr;                            
     
 const uint32_t weight_addr = phy_addr+tile_info_offset;                                                         //weight實體記憶體位置
 
-init_info_addr(tile_info, input_addr, weight_addr);                                                             //只要是有算到addr都需要是實體記憶體位置，目前虛擬的只有用到放資料
-memcpy(dst, tile_info.data(), size_in_byte(tile_info));
+init_info_addr(tile_info, input_addr, weight_addr);                                                             //只要是有算到addr都需要是實體記憶體位置，虛擬的只有用到放資料(沒有被使用到)
+memcpy(dst, tile_info.data(), size_in_byte(tile_info));                                                         //tile_info回傳之後把資料都複製到虛擬記憶體位置上，利用byte的形式
 
 for(auto &i : layer){
-    if(!check_have_final(i, dst)){
+    if(!check_have_final(i, dst)){                                                                              //前面有，抓是不是最後一個tile有給final tile訊號
         std::cerr << "Tile infomation format error.\n";
     }
 }
 
-for(uint32_t i = 0; i < layer.size(); i++){
+for(uint32_t i = 0; i < layer.size(); i++){                                                                     //初始化每一層tile information起始位置
     layer[i].init_addr(phy_addr);
 }
 return std::tuple<std::vector<layer_info> ,const uint32_t>{layer, input_offset};
@@ -270,4 +270,69 @@ set_weight_addr()
 for(int i = 0; i < 4; i++){ 
     data[i+4] = (addr>>(i*8))&0xff;                                                                             //把你取得的資料8bit by 8bit 推回去
 }
+```
+# 13. main
+```c++
+if(argc != 7){                                                                                                  //開裝置
+    std::cout << 1 << std::endl;
+    return -1;
+}
+    
+const int fd = open(argv[1], O_RDWR);
+if(fd < 0){
+    std::cerr << "Can not open " << argv[1] << std::endl;                                                       //開裝置
+    return -1;
+}
+
+cv::VideoCapture cap(argv[5], cv::CAP_FFMPEG);
+if(!cap.isOpened()){
+    close(fd);
+    std::cerr << "Can not open " << argv[5] << std::endl;                                                       
+cap.release();
+    return -1;
+}
+cap.set(cv::CAP_PROP_BUFFERSIZE, 20);
+
+
+const std::string layer_info_file = argv[2];
+const std::string tile_info_file = argv[3];
+const std::string weight_file = argv[4];
+// const std::string image_file = argv[5];
+std::ifstream in(argv[6]);
+size_t out_addr_tmp = 0;
+const int iou = 30;                                                                                             //open_cv parmeter
+const int conf = 30;
+short *res_1 = (short *)malloc(8*8*18*sizeof(short));                                                           //最後輸出要求記憶體空間
+short *res_2 = (short *)malloc(16*16*18*sizeof(short));                                                         
+
+float draw_1 [8][8][18] = {0};                                                                                  //最後畫圖要求大小
+float draw_2 [16][16][18] = {0};
+
+    
+const uint32_t phy_addr = ioctl(fd, MEM_ALLOC, MEM_SIZE);                                                       //透過ioctl system call去呼叫我們再test.ko內部參數
+if(phy_addr == -1) return -1;
+uint8_t *virt_addr = (uint8_t *)mmap(NULL, MEM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd , 0);               //透過mmap將virt_addr pointer導到硬體的記憶體位置開頭
+//uint8_t *virt_addr_2 = virt_addr;
+if ( virt_addr == MAP_FAILED ) {
+    std::cout<<"Memory mapping failed!!!!!!!" << std::endl;
+    ioctl(fd, MEM_FREE, MEM_SIZE);
+    cap.release();
+    close(fd);
+	return -1 ;
+} 
+std::vector<uint32_t> out_addr;                                                                                 //硬體一共兩個輸出
+while (in >> out_addr_tmp){
+    out_addr.push_back(out_addr_tmp);                                                                           //輸出點紀錄
+}
+in.close();                                                                                                     //關閉文件
+auto [layer, input_offset] = run_init(weight_file, tile_info_file, layer_info_file, phy_addr, virt_addr);       //得到所有的layer info 和 實體記憶體位置算出來的input_offset
+if(layer.data() == nullptr){
+    munmap(virt_addr, MEM_SIZE);
+    std::cout << "Error" << std::endl;
+    ioctl(fd, MEM_FREE, MEM_SIZE);
+    cap.release();
+    close(fd);
+    return -1;
+}
+cv::Mat pit;                                                                                                    //opencv MAT
 ```

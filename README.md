@@ -373,7 +373,7 @@ for(int ch = 0; ch < 18; ch++){
         }
     }
 }
-localization(pit, draw_1, draw_2, conf, iou);                                                                   //開始畫圖
+localization(pit, draw_1, draw_2, conf, iou);                                                                   //開始畫圖，並顯示
 if(cv::waitKey(0)) break;
 break;
 free(res_1);                                                                                                    //請記得free指標不然會出事

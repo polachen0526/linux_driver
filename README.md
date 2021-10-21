@@ -182,13 +182,44 @@ return tmp;
 ```c++
 std::vector<inst> tile_info = load_inst_data(tile_info_file);
 std::vector<layer_info> layer =  parse_file(layer_info_file);
-const uint32_t tile_info_offset =  std::ceil(size_in_byte(tile_info)/(double)PAGE_SIZE)*PAGE_SIZE;
+const uint32_t tile_info_offset =  std::ceil(size_in_byte(tile_info)/(double)PAGE_SIZE)*PAGE_SIZE;              //推算tile_info到底要多少個page才可以放完
 
-const uint32_t weight_offset = load_weight(dst+tile_info_offset, weight);
+const uint32_t weight_offset = load_weight(dst+tile_info_offset, weight);                                       //推完tile_info之後你要推weight資料，所以你要把虛擬記憶體指標+tile_info的記憶體量，才可以矲放weight，然後會回傳weight的file_szie
 
-const uint32_t input_addr  = std::ceil((phy_addr+tile_info_offset+weight_offset)/(double)PAGE_SIZE)*PAGE_SIZE;
+const uint32_t input_addr  = std::ceil((phy_addr+tile_info_offset+weight_offset)/(double)PAGE_SIZE)*PAGE_SIZE;  //這邊會需要把你之前算的位置加上去才可以推出你之後進入點在哪邊，但這邊是算實體記憶體位置
 
-const uint32_t input_offset = input_addr - phy_addr;
+const uint32_t input_offset = input_addr - phy_addr;                                                            //推出你所需要的input_offset
+    
+const uint32_t weight_addr = phy_addr+tile_info_offset;                                                         //weight實體記憶體位置
 
-const uint32_t weight_addr = phy_addr+tile_info_offset;
+init_info_addr(tile_info, input_addr, weight_addr);                                                             //只要是有算到addr都需要是實體記憶體位置，目前虛擬的只有用到放資料
+memcpy(dst, tile_info.data(), size_in_byte(tile_info));
+
+for(auto &i : layer){
+    if(!check_have_final(i, dst)){
+        std::cerr << "Tile infomation format error.\n";
+    }
+}
+
+for(uint32_t i = 0; i < layer.size(); i++){
+    layer[i].init_addr(phy_addr);
+}
+return std::tuple<std::vector<layer_info> ,const uint32_t>{layer, input_offset};
+```
+# 12. init_info_addr()
+```c++
+for(auto &i : inst_data){
+    i.set_in_addr(i.get_in_addr()+ base_addr);
+    i.set_out_no_max_addr(i.get_out_no_max_addr() + base_addr);	
+    i.set_out_addr(i.get_out_addr()+ base_addr);
+    i.set_weight_addr(i.get_weight_addr()+ weight_addr);
+}
+```
+get_in_addr()
+```c++
+uint32_t tmp = 0;
+for(int i = 0; i < 4; i++){
+    tmp |= data[i+8] << (i*8);
+}
+return tmp;
 ```
